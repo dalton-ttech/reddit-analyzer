@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reddit 市场调研工具</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Reddit 市场调研工具</h1>
+            <p>输入关键词，选择分析维度，让 AI 为您生成市场洞察报告。</p>
+        </header>
+
+        <main>
+            <div class="form-container">
+                <input type="text" id="keyword" placeholder="输入您想调研的关键词 (例如: 窗帘)">
+
+                <div class="options-grid">
+                    <select id="timeframe">
+                        <option value="month">近一个月</option>
+                        <option value="year" selected>近一年</option>
+                    </select>
+                    <select id="sort_order">
+                        <option value="top">按热度排序</option>
+                        <option value="new" selected>按时间排序</option>
+                    </select>
+                    <select id="subreddits">
+                        <option value="all">全部板块</option>
+                        <option value="smart" disabled>智能检索板块 (待开发)</option>
+                    </select>
+                    <input type="number" id="limit" min="1" max="200" value="10" placeholder="帖子数量 (1-200)">
+                </div>
+
+                <button id="start-task">开始任务</button>
+            </div>
+
+            <div id="progress-container" class="hidden">
+                <p id="progress-text">正在初始化任务...</p>
+                <div class="progress-bar-background">
+                    <div class="progress-bar-foreground"></div>
+                </div>
+            </div>
+
+            <div id="result-container" class="hidden">
+                <p class="emoji-celebration">🎉 任务完成！🎉</p>
+                <a href="#" id="view-report-button" class="button">点击查看报告</a>
+            </div>
+
+            <div class="disclaimer">
+                <p><strong>请注意：</strong>为了确保API处理效率和控制成本，分析程序当前仅截取抓取到的评论文本的前10,000个字符进行AI分析。</p>
+            </div>
+            </main>
+    </div>
+    <script src="/static/script.js"></script>
+</body>
+</html>
