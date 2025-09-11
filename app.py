@@ -152,8 +152,6 @@ except Exception as e:
 
 tasks = {"current_task": {"status": "等待中", "progress": 0, "report_url": "", "ai_subreddits": None}}
 
-# ... (generate_report_html 和 real_task_runner 函数保持不变) ...
-# 注意：这部分代码来自我们之前的最终版本，确保所有功能都包含在内
 def generate_report_html(report_data_json, keyword):
     try:
         data = json.loads(report_data_json)
@@ -174,12 +172,13 @@ def generate_report_html(report_data_json, keyword):
         # 构建评论案例HTML
         comments_html = ""
         for item in data.get("commentExamples", []):
+            permalink = item.get('permalink', '#')
             comments_html += f"""
             <div class="content-box comment-box">
                 <h3>痛点：{item['painPointTitle']}</h3>
                 <blockquote>
                     <p>{item['commentTranslation']}</p>
-                    <footer>- Reddit 用户 (热度: {item['score']} 赞, {item['replies']} 回复)</footer>
+                    <footer>- Reddit 用户 (热度: {item.get('score', 0)} 赞, {item.get('replies', 0)} 回复) | <a href="{permalink}" target="_blank">查看原文</a></footer>
                 </blockquote>
             </div>
             """
@@ -187,10 +186,11 @@ def generate_report_html(report_data_json, keyword):
         # 准备图表数据
         chart_data_for_script = data.get("painPointChartData", {})
 
-        # 最终HTML模板
+        # 最终HTML模板 (注意：这里我们不需要它是f-string，所以去掉了前面的f)
         html_content = f"""
         <!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><title>{title}</title>
         <style>
+            /* --- 你的CSS样式代码在这里，保持不变 --- */
             @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap');
             :root {{ --bg-color: #fdf5e6; --text-color: #5d4037; --primary-color: #d2b48c; --secondary-color: #e9ddc7; --container-bg: #fffaf0; }}
             body {{ font-family: 'Noto Sans SC', sans-serif; margin: 0; background-color: var(--bg-color); color: var(--text-color); }}
@@ -239,69 +239,57 @@ def generate_report_html(report_data_json, keyword):
         return html_content
     except Exception as e:
         return f"<h1>报告生成失败</h1><p>解析AI返回的数据时出错: {e}</p><pre>{report_data_json}</pre>"
-
 # 修改后 (智能检索)
-def real_task_runner(keyword, timeframe, sort_order, limit, search_mode): # <--- 1. 新增 search_mode 参数
+def real_task_runner(keyword, timeframe, sort_order, limit, search_mode):
     task_info = tasks["current_task"]
     TOTAL_CHARS_LIMIT = 20000
     try:
-        # --- 新增的逻辑岔路口 ---
-        subreddits_for_this_task = "" # 先创建一个空变量
+        subreddits_for_this_task = ""
         if search_mode == "smart":
             print(f"--- [主任务] 检测到 '智能检索' 模式 ---")
-            # 如果是智能模式，调用AI函数获取版块列表
             subreddits_for_this_task = get_ai_subreddits(keyword, task_info)
         else:
             print(f"--- [主任务] 检测到 '标准检索' 模式 ---")
-            # 否则，使用我们预设的版块列表
             subreddits_for_this_task = SUBREDDITS_TO_SEARCH
-        # --- 新增逻辑结束 ---
-
+        
         task_info["status"] = "正在连接 Reddit..."
-        task_info["progress"] = 5 # 注意：这个进度可能会被 get_ai_subreddits 覆盖，这是正常的
+        task_info["progress"] = 5
         reddit = praw.Reddit(client_id=REDDIT_CLIENT_ID, client_secret=REDDIT_CLIENT_SECRET, user_agent=REDDIT_USER_AGENT, username=REDDIT_USERNAME, password=REDDIT_PASSWORD)
         
         task_info["status"] = f"准备在多个版块中搜索 '{keyword}'..."
         task_info["progress"] = 15
         
-        # --- 终极修复：拆分版块列表，逐个搜索 ---
         individual_subreddits = subreddits_for_this_task.split('+')
-        all_search_results = [] # 创建一个空列表来汇总所有结果
+        all_search_results = []
         print(f"--- [PRAW] 准备对 {len(individual_subreddits)} 个版块进行逐一搜索 ---")
 
-        # 开始循环，逐个处理版块
         for sub_name in individual_subreddits:
-            # 清理版块名，去掉可能存在的 'r/' 前缀或空格
             sub_name = sub_name.replace('r/', '').strip()
-            if not sub_name: continue # 如果名字是空的就跳过
+            if not sub_name: continue
 
             try:
                 print(f"--- [PRAW] ==> 正在搜索版块: r/{sub_name}...")
-                subreddit = reddit.subreddit(sub_name) # 创建单个版块的对象
+                subreddit = reddit.subreddit(sub_name)
                 
-                # 为本次搜索准备参数
                 search_params = {
                     'query': keyword,
-                    'limit': int(limit), # 注意：这里使用原始 limit，让每个版块都能获取足够的帖子
+                    'limit': int(limit),
                     'sort': sort_order
                 }
                 
                 if sort_order in ['top', 'relevance']:
                     search_params['time_filter'] = timeframe
 
-                # 对这一个版块执行搜索，并把结果添加到总列表中
                 all_search_results.extend(list(subreddit.search(**search_params)))
                 print(f"--- [PRAW] <== r/{sub_name} 搜索完成，已找到部分结果。")
 
             except Exception as e:
-                # 如果这个版块搜索失败了，就打印一条警告，然后继续下一个
                 print(f"!!! [PRAW] 警告：搜索版块 r/{sub_name} 时出错: {e}。已跳过此版块。!!!")
-                continue # 继续循环的下一次
+                continue
         
-        # 循环结束后，使用我们汇总好的总列表作为最终的搜索结果
         search_results = all_search_results
         print(f"--- [PRAW] 所有版块搜索完毕，共汇总 {len(search_results)} 个帖子。")
-        # --- 修复结束 ---
+        
         comments_for_analysis = []
         task_info["status"] = "正在抓取评论并过滤..."
         task_info["progress"] = 25
@@ -317,55 +305,63 @@ def real_task_runner(keyword, timeframe, sort_order, limit, search_mode): # <---
                 comments_for_analysis.append({
                     "body": comment.body,
                     "score": comment.score,
-                    "replies": len(comment.replies)
+                    "replies": len(comment.replies),
+                    "permalink": f"https://www.reddit.com{comment.permalink}"
                 })
             collected_posts_count += 1
         
         if not comments_for_analysis: raise ValueError("未能找到任何相关的评论。")
         
-        comments_text = "\n".join([f"Comment (Score: {c['score']}, Replies: {c['replies']}): {c['body']}" for c in comments_for_analysis])
+        # --- 关键修改：确保将包含 permalink 的完整信息传递给 AI ---
+        comments_text = "\n".join([json.dumps(c, ensure_ascii=False) for c in comments_for_analysis])
 
         task_info["status"] = "数据抓取完毕，正在请求 Gemini AI 分析..."
         task_info["progress"] = 65
-        model = genai.GenerativeModel('gemini-2.5-pro')
+        model = genai.GenerativeModel('gemini-2.5-pro') # 或者 'gemini-pro'
         
         prompt = f"""
-        你是一位顶级的市场研究和数据分析专家。你的任务是根据下面提供的关于 "{keyword}" 的 Reddit 评论（每条评论都附带了热度分和回复数），生成一份结构化的市场分析报告。
-        你的输出必须是一个完整的、可以被Python直接解析的JSON对象。请严格遵循下面的结构，不要添加任何额外的解释或文字。
+你是一位顶级的市场研究和数据分析专家。你的任务是根据下面提供的关于 "{keyword}" 的 Reddit 评论（数据为JSON Lines格式，每行一条评论，包含body, score, replies, permalink），生成一份结构化的、内容丰富的市场分析报告。
 
+你的分析要求：
+1.  **深度与广度**：请从评论中总结出至少 **5-8个** 核心的市场痛点或用户需求点。
+2.  **案例支撑**：对于每一个识别出的核心痛点，请挑选 **2-3条** 最具代表性的评论作为案例进行支撑。
+3.  **严格的JSON格式**：你的输出必须是一个完整的、可以被Python直接解析的JSON对象。请严格遵循下面的结构，不要添加任何额外的解释或文字。
+
+{{
+    "executiveSummary": "在这里用3-4句话概述最重要的发现，包括最主要的市场痛点和情绪。",
+    "marketHotTopics": [
+        {{"keyword": "热点词1", "explanation": "解释..."}},
+        {{"keyword": "热点词2", "explanation": "解释..."}},
+        {{"keyword": "热点词3", "explanation": "解释..."}}
+    ],
+    "marketSentiment": {{
+        "overall": "正面 XX%, 负面 XX%, 中性 XX%",
+        "analysis": "具体分析市场情绪背后的原因，比如用户为什么感到满意或不满。"
+    }},
+    "corePainPoints": [
+        {{"title": "痛点一标题", "description": "详细描述这个痛点的具体表现、背景和用户感受。", "count": 0}},
+        {{"title": "痛点二标题", "description": "详细描述...", "count": 0}}
+    ],
+    "painPointChartData": {{
+        "labels": ["痛点一", "痛点二", "..."],
+        "data": [0, 0, 0],
+        "colors": ["#D2B48C", "#E9DDc7", "#856404", "#a17a48", "#b99a6b"]
+    }},
+    "commentExamples": [
         {{
-            "executiveSummary": "在这里用2-3句话概述核心发现。",
-            "marketHotTopics": [
-                {{"keyword": "热点词1", "explanation": "解释..."}},
-                {{"keyword": "热点词2", "explanation": "解释..."}}
-            ],
-            "marketSentiment": {{
-                "overall": "正面 XX%, 负面 XX%, 中性 XX%",
-                "analysis": "具体分析..."
-            }},
-            "corePainPoints": [
-                {{"title": "痛点一标题", "description": "详细描述...", "count": 0}},
-                {{"title": "痛点二标题", "description": "详细描述...", "count": 0}}
-            ],
-            "painPointChartData": {{
-                "labels": ["痛点一", "痛点二", "..."],
-                "data": [0, 0, 0],
-                "colors": ["#D2B48C", "#E9DDc7", "#856404"]
-            }},
-            "commentExamples": [
-                {{
-                    "painPointTitle": "所属的痛点标题",
-                    "commentTranslation": "将最有代表性的那条评论翻译成中文。",
-                    "score": 0,
-                    "replies": 0
-                }}
-            ]
+            "painPointTitle": "所属的痛点标题",
+            "commentTranslation": "将最有代表性的那条评论翻译成中文。",
+            "score": 0,
+            "replies": 0,
+            "permalink": "这里应该填入原始评论的完整URL链接"
         }}
+    ]
+}}
 
-        请根据下面的原始数据填充以上JSON结构。其中'count'代表属于该痛点的评论大致数量，'painPointChartData'里的数据需要根据你总结的痛点来生成。'commentExamples'请为每个主要痛点挑选一条最典型（比如赞同数最高）的评论作为案例。
-        --- 原始评论数据 ---
-        {comments_text[:TOTAL_CHARS_LIMIT]}
-        """
+请根据下面的原始数据填充以上JSON结构。其中'count'代表属于该痛点的评论大致数量，'painPointChartData'里的数据需要根据你总结的痛点来生成。务必从原始数据中提取 'permalink' 并填入 'commentExamples'。
+--- 原始评论数据 ---
+{comments_text[:TOTAL_CHARS_LIMIT]}
+"""
         
         response = model.generate_content(prompt)
         
