@@ -147,3 +147,38 @@ button:hover, .button:hover {
     background-color: #f0f2f5; /* 一个非常浅的灰色背景 */
     border-radius: 5px;
 }
+
+.info-box {
+    background-color: #e3f2fd;
+    border-left: 5px solid #2196f3;
+    padding: 15px 20px;
+    margin: 20px 0;
+    border-radius: 4px;
+    opacity: 0; /* 初始透明 */
+    transform: translateY(20px); /* 初始位置偏下 */
+    transition: opacity 0.5s ease-out, transform 0.5s ease-out; /* 过渡效果 */
+}
+
+.info-box.visible {
+    opacity: 1; /* 最终不透明 */
+    transform: translateY(0); /* 最终位置正常 */
+}
+
+.info-box h2 {
+    margin-top: 0;
+    font-size: 1.1em;
+    color: #1e88e5;
+}
+
+.info-box ul {
+    list-style-type: none;
+    padding-left: 0;
+}
+
+.info-box ul li {
+    background-color: #ffffff;
+    padding: 8px 12px;
+    border-radius: 4px;
+    margin-bottom: 8px;
+    font-weight: 500;
+}

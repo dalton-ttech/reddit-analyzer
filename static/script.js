@@ -19,11 +19,11 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     let pollingInterval; 
-
+    let aiBoxShown = false; // <--- 新增这行，这是一个开关，确保信息框只显示一次
     // 当用户点击“开始任务”按钮时
     startButton.addEventListener('click', function() {
         console.log("--- “开始任务”按钮被点击 ---");
-
+        aiBoxShown = false;
         // 1. 从输入框获取用户选项
         const keyword = document.getElementById('keyword').value;
         console.log("--- 获取到关键词:", keyword);
@@ -92,33 +92,71 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // 查询状态的函数 (这部分保持不变)
     function checkStatus() {
-        // ... (checkStatus 函数内容不变) ...
-        fetch('/task-status')
-            .then(response => response.json())
-            .then(data => {
-                progressText.innerText = data.status;
-                progressBar.style.width = data.progress + '%';
+    fetch('/task-status')
+        .then(response => response.json())
+        .then(data => {
+            // --- 你已有的代码 (保持不变) ---
+            progressText.innerText = data.status;
+            progressBar.style.width = data.progress + '%';
 
-                if (data.progress >= 100) {
-                    clearInterval(pollingInterval);
-                    if (data.report_url) {
-                        viewReportButton.href = data.report_url;
-                        viewReportButton.target = "_blank";
-                    } else {
-                        viewReportButton.innerText = "生成报告失败";
-                        viewReportButton.style.backgroundColor = "#888";
-                        viewReportButton.style.cursor = "not-allowed";
-                    }
+            // --- 从这里开始，是我们新增的代码 ---
+            // 检查后端是否发来了 ai_subreddits 数据，并且我们的信息框还没显示过
+            if (data.ai_subreddits && !aiBoxShown) {
+                console.log("--- 检测到AI推荐的版块，准备显示信息框 ---", data.ai_subreddits);
+                const aiBox = document.getElementById('ai-recommendation-box');
+                const aiList = document.getElementById('ai-subreddits-list');
+                
+                // 确保我们找到了对应的HTML元素
+                if (aiBox && aiList) {
+                    aiList.innerHTML = ''; // 清空上一次可能留下的内容
+                    
+                    // 遍历后端发来的数据，创建列表项
+                    data.ai_subreddits.forEach(sub => {
+                        const listItem = document.createElement('li');
+                        listItem.textContent = `r/${sub.name} (${sub.translation})`;
+                        aiList.appendChild(listItem);
+                    });
+                    
+                    // 让信息框显示出来
+                    aiBox.classList.remove('hidden');
+                    // 用一个极短的延时来触发CSS动画效果
                     setTimeout(() => {
-                        progressContainer.classList.add('hidden');
-                        resultContainer.classList.remove('hidden');
-                    }, 500);
+                        aiBox.classList.add('visible');
+                    }, 50);
+
+                    // 把“开关”关上，确保这个信息框只被创建和显示一次
+                    aiBoxShown = true; 
                 }
-            })
-            .catch(error => {
-                console.error('查询状态时出错:', error);
+            }
+            // --- 新增代码到此结束 ---
+
+
+            // --- 你已有的代码 (保持不变) ---
+            if (data.progress >= 100) {
                 clearInterval(pollingInterval);
-                progressText.innerText = '查询进度失败，连接可能已断开。';
-            });
-    }
-});
+                if (data.report_url) {
+                    viewReportButton.href = data.report_url;
+                    viewReportButton.target = "_blank";
+                } else {
+                    viewReportButton.innerText = "生成报告失败";
+                    viewReportButton.style.backgroundColor = "#888";
+                    viewReportButton.style.cursor = "not-allowed";
+                }
+                setTimeout(() => {
+                    progressContainer.classList.add('hidden');
+                    // 当任务完成时，也顺便把AI信息框隐藏掉
+                    const aiBox = document.getElementById('ai-recommendation-box');
+                    if(aiBox) {
+                        aiBox.classList.add('hidden');
+                        aiBox.classList.remove('visible'); // 重置样式
+                    }
+                    resultContainer.classList.remove('hidden');
+                }, 500);
+            }
+        })
+        .catch(error => {
+            console.error('查询状态时出错:', error);
+            clearInterval(pollingInterval);
+            progressText.innerText = '查询进度失败，连接可能已断开。';
+        });
+    }})
