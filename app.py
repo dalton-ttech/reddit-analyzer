@@ -22,37 +22,22 @@ try:
     print("--- 成功导入 re ---")
     from waitress import serve
     print("--- 成功导入 Waitress ---")
+    from dotenv import load_dotenv
+    print("--- 成功导入 Dotenv ---")
 except ImportError as e:
     print(f"!!! 在导入库时发生严重错误: {e} !!!")
     print("!!! 错误很可能意味着某个库没有被正确安装。!!!")
-    print("!!! 请在终端里尝试运行: pip install Flask praw google-generativeai waitress --upgrade !!!")
+    print("!!! 请在终端里尝试运行: pip install Flask praw google-generativeai waitress python-dotenv --upgrade !!!")
     exit(1) # 导入失败，直接退出
 
 
 print("\n--- 所有库导入成功，准备初始化App ---")
 
+load_dotenv() # 在程序开始时加载 .env 文件里的变量
+
 app = Flask(__name__)
 print("--- Flask App 初始化成功 ---")
 
-@app.route('/favicon.ico')
-def favicon():
-    return ('', 204)
-
-
-# ---!!! 请在这里填入你所有的API密钥 !!!---
-from flask import Flask, render_template, request, jsonify
-import praw
-import google.generativeai as genai
-import threading
-import os
-import datetime
-import json
-import re
-from dotenv import load_dotenv # <-- 新增导入
-
-load_dotenv() # <-- 新增：在程序开始时加载 .env 文件里的变量
-
-app = Flask(__name__)
 
 # --- API 密钥现在从环境变量中读取 ---
 REDDIT_CLIENT_ID = os.getenv("REDDIT_CLIENT_ID")
@@ -64,18 +49,25 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 # ------------------------------------
 
 
-
 # ==================== 配置变量 ====================
 SUBREDDITS_TO_SEARCH = "homeimprovement+interiordesign+Apartmentliving+malelivingspace+femalelivingspace+homeautomation"
 BLOCKED_KEYWORDS = ["shower", "politics", "trump", "war", "navy", "smoke", "military", "game"]
 # =======================================================
-
-# --- 新增的函数：智能检索版块 ---
-
-
 print("--- API密钥和配置变量已加载 ---")
-# --- 新增的函数：智能检索版块 (V2 - 带翻译功能) ---
-# --- 新增的函数：智能检索版块 (V3 - 修复验证规则) ---
+
+try:
+    genai.configure(api_key=GEMINI_API_KEY)
+    print("--- Gemini API 配置成功 ---")
+except Exception as e:
+    print(f"!!! Gemini API 配置失败: {e} !!!")
+    exit(1)
+
+
+# --- 全局任务状态字典 ---
+tasks = {"current_task": {"status": "等待中", "progress": 0, "report_url": "", "ai_subreddits": None}}
+
+
+# --- 智能检索版块函数 ---
 def get_ai_subreddits(keyword, task_info):
     """
     使用 Gemini API 动态获取并翻译相关的 Reddit 版块列表。
@@ -86,44 +78,39 @@ def get_ai_subreddits(keyword, task_info):
         task_info["progress"] = 10
         model = genai.GenerativeModel('gemini-1.5-flash') 
         
-        # --- 第一次请求：获取版块列表 ---
         prompt_for_subreddits = f"""你是一个对 Reddit 了如指掌的专家。针对关键词 "{keyword}"，请推荐最多10个最相关的 Reddit 子版块。返回的格式必须是一个由加号 `+` 连接的单一字符串，例如 "subreddit1+subreddit2+subreddit3" 或 "r/subreddit1+r/subreddit2"。除了这个字符串，不要返回任何其他文字。"""
         
         print("--- [智能检索] 正在向 Gemini 发送请求 [获取版块]... ---")
         response = model.generate_content(prompt_for_subreddits)
         ai_generated_string = response.text.strip().replace("\n", "")
         
-        # --- 关键修复：更新验证规则以接受 "r/" ---
         if not re.match(r'^[a-zA-Z0-9_/]+(\+[a-zA-Z0-9_/]+)*$', ai_generated_string):
             print(f"!!! [智能检索] 错误：获取的版块格式不符合预期: '{ai_generated_string}'。将使用默认版块。 !!!")
             return SUBREDDITS_TO_SEARCH
 
         print(f"--- [智能检索] 成功获取版块列表: '{ai_generated_string}' ---")
-        # 清理列表，去掉 'r/' 前缀，方便后续翻译
-        subreddit_list = [sub.replace('r/', '') for sub in ai_generated_string.split('+')]
+        subreddit_list = [sub.replace('r/', '') for sub in ai_generated_string.split('+') if sub]
         
-        # --- 第二次请求：翻译版块列表 ---
         task_info["status"] = "获取版块成功，正在请求 AI 翻译..."
         prompt_for_translation = f"""
-        你是一位专业的翻译。请将下面的 Reddit 子版块名称翻译成简洁、准确的中文名。
-        你的输出必须是一个完整的 JSON 对象，其中键是原始的英文名，值是中文翻译。
-        例如，如果输入是 "homeimprovement, interiordesign"，你的输出应该是：
-        {{
-            "homeimprovement": "家居装修",
-            "interiordesign": "室内设计"
-        }}
-        除了这个 JSON 对象，不要返回任何其他文字。
+你是一位专业的翻译。请将下面的 Reddit 子版块名称翻译成简洁、准确的中文名。
+你的输出必须是一个完整的 JSON 对象，其中键是原始的英文名，值是中文翻译。
+例如，如果输入是 "homeimprovement, interiordesign"，你的输出应该是：
+{{
+    "homeimprovement": "家居装修",
+    "interiordesign": "室内设计"
+}}
+除了这个 JSON 对象，不要返回任何其他文字。
 
-        这是需要翻译的列表：
-        {", ".join(subreddit_list)}
-        """
+这是需要翻译的列表：
+{", ".join(subreddit_list)}
+"""
         
         print("--- [智能检索] 正在向 Gemini 发送请求 [翻译版块]... ---")
         response_translation = model.generate_content(prompt_for_translation)
         json_string = re.search(r'\{.*\}', response_translation.text, re.DOTALL).group(0)
         translations = json.loads(json_string)
         
-        # --- 组合结果并更新公告板 ---
         results_for_frontend = []
         for sub_name in subreddit_list:
             results_for_frontend.append({
@@ -134,24 +121,14 @@ def get_ai_subreddits(keyword, task_info):
         task_info["ai_subreddits"] = results_for_frontend
         print(f"--- [智能检索] 成功生成带翻译的版块列表，并已更新至 task_info ---")
         
-        # 返回给 PRAW 的仍然是带 r/ (如果AI提供了) 或者不带 r/ 的原始字符串
         return ai_generated_string
 
     except Exception as e:
         print(f"!!! [智能检索] 过程中发生错误: {e}。将使用默认版块列表。 !!!")
         return SUBREDDITS_TO_SEARCH
-# --- 新版本函数结束 ---
-
-try:
-    genai.configure(api_key=GEMINI_API_KEY)
-    print("--- Gemini API 配置成功 ---")
-except Exception as e:
-    print(f"!!! Gemini API 配置失败: {e} !!!")
-    exit(1)
 
 
-tasks = {"current_task": {"status": "等待中", "progress": 0, "report_url": "", "ai_subreddits": None}}
-
+# --- 报告生成函数 ---
 def generate_report_html(report_data_json, keyword):
     try:
         data = json.loads(report_data_json)
@@ -183,14 +160,11 @@ def generate_report_html(report_data_json, keyword):
             </div>
             """
         
-        # 准备图表数据
         chart_data_for_script = data.get("painPointChartData", {})
 
-        # 最终HTML模板 (注意：这里我们不需要它是f-string，所以去掉了前面的f)
         html_content = f"""
         <!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><title>{title}</title>
         <style>
-            /* --- 你的CSS样式代码在这里，保持不变 --- */
             @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap');
             :root {{ --bg-color: #fdf5e6; --text-color: #5d4037; --primary-color: #d2b48c; --secondary-color: #e9ddc7; --container-bg: #fffaf0; }}
             body {{ font-family: 'Noto Sans SC', sans-serif; margin: 0; background-color: var(--bg-color); color: var(--text-color); }}
@@ -239,7 +213,9 @@ def generate_report_html(report_data_json, keyword):
         return html_content
     except Exception as e:
         return f"<h1>报告生成失败</h1><p>解析AI返回的数据时出错: {e}</p><pre>{report_data_json}</pre>"
-# 修改后 (智能检索)
+
+
+# --- 核心任务执行函数 (V7 - 采用公平配额抓取策略) ---
 def real_task_runner(keyword, timeframe, sort_order, limit, search_mode):
     task_info = tasks["current_task"]
     TOTAL_CHARS_LIMIT = 20000
@@ -256,50 +232,61 @@ def real_task_runner(keyword, timeframe, sort_order, limit, search_mode):
         task_info["progress"] = 5
         reddit = praw.Reddit(client_id=REDDIT_CLIENT_ID, client_secret=REDDIT_CLIENT_SECRET, user_agent=REDDIT_USER_AGENT, username=REDDIT_USERNAME, password=REDDIT_PASSWORD)
         
-        task_info["status"] = f"准备在多个版块中搜索 '{keyword}'..."
+        task_info["status"] = f"准备在多个版块中公平抓取帖子..."
         task_info["progress"] = 15
         
-        individual_subreddits = subreddits_for_this_task.split('+')
-        all_search_results = []
-        print(f"--- [PRAW] 准备对 {len(individual_subreddits)} 个版块进行逐一搜索 ---")
+        individual_subreddits = [s for s in subreddits_for_this_task.split('+') if s]
+        if not individual_subreddits: raise ValueError("未能确定任何要搜索的版块。")
 
+        # 1. 计算配额
+        target_fetch_count = int(limit) * 2
+        quota_per_sub = (target_fetch_count // len(individual_subreddits)) + 1
+        print(f"--- [PRAW] 策略：最终分析 {limit} 个帖子, 准备抓取约 {target_fetch_count} 个帖子作为样本池。")
+        print(f"--- [PRAW] 共 {len(individual_subreddits)} 个版块, 每个版块配额为 {quota_per_sub} 个帖子。")
+
+        all_search_results = []
         for sub_name in individual_subreddits:
             sub_name = sub_name.replace('r/', '').strip()
-            if not sub_name: continue
-
             try:
-                print(f"--- [PRAW] ==> 正在搜索版块: r/{sub_name}...")
+                print(f"--- [PRAW] ==> 正在版块 r/{sub_name} 中抓取 {quota_per_sub} 个帖子...")
                 subreddit = reddit.subreddit(sub_name)
-                
-                search_params = {
-                    'query': keyword,
-                    'limit': int(limit),
-                    'sort': sort_order
-                }
-                
+                search_params = { 'query': keyword, 'limit': quota_per_sub, 'sort': sort_order }
                 if sort_order in ['top', 'relevance']:
                     search_params['time_filter'] = timeframe
-
                 all_search_results.extend(list(subreddit.search(**search_params)))
-                print(f"--- [PRAW] <== r/{sub_name} 搜索完成，已找到部分结果。")
-
             except Exception as e:
-                print(f"!!! [PRAW] 警告：搜索版块 r/{sub_name} 时出错: {e}。已跳过此版块。!!!")
+                print(f"!!! [PRAW] 警告：搜索版块 r/{sub_name} 时出错: {e}。已跳过。!!!")
                 continue
         
-        search_results = all_search_results
-        print(f"--- [PRAW] 所有版块搜索完毕，共汇总 {len(search_results)} 个帖子。")
-        
-        comments_for_analysis = []
-        task_info["status"] = "正在抓取评论并过滤..."
-        task_info["progress"] = 25
-        collected_posts_count = 0
+        print(f"--- [PRAW] 公平抓取完成，共获得 {len(all_search_results)} 个帖子。")
 
-        for submission in search_results:
-            if collected_posts_count >= int(limit): break
+        # 2. 汇总后排序
+        task_info["status"] = "帖子抓取完毕，正在排序..."
+        task_info["progress"] = 20
+        all_search_results.sort(key=lambda x: x.score, reverse=True)
+        print(f"--- [主任务] {len(all_search_results)} 个帖子已按热度排序。")
+
+        # 3. 筛选并切片
+        final_submissions = []
+        print(f"--- [主任务] 开始过滤屏蔽词，并选取前 {limit} 个有效帖子... ---")
+        for submission in all_search_results:
+            if len(final_submissions) >= int(limit):
+                break
+
             title_lower = submission.title.lower()
-            if any(blocked_word in title_lower for blocked_word in BLOCKED_KEYWORDS): continue
+            if any(blocked_word in title_lower for blocked_word in BLOCKED_KEYWORDS):
+                continue
             
+            final_submissions.append(submission)
+        
+        print(f"--- [主任务] 筛选完成，最终选定 {len(final_submissions)} 个帖子进行分析。")
+        
+        # 4. 抓取最终选定帖子的评论
+        comments_for_analysis = []
+        task_info["status"] = "正在抓取最终帖子的评论..."
+        task_info["progress"] = 25
+        for submission in final_submissions:
+            print(f"--- [主任务] 正在处理帖子: '{submission.title}' (Score: {submission.score}) ---")
             submission.comments.replace_more(limit=0)
             for comment in submission.comments.list():
                 comments_for_analysis.append({
@@ -308,16 +295,14 @@ def real_task_runner(keyword, timeframe, sort_order, limit, search_mode):
                     "replies": len(comment.replies),
                     "permalink": f"https://www.reddit.com{comment.permalink}"
                 })
-            collected_posts_count += 1
         
         if not comments_for_analysis: raise ValueError("未能找到任何相关的评论。")
         
-        # --- 关键修改：确保将包含 permalink 的完整信息传递给 AI ---
         comments_text = "\n".join([json.dumps(c, ensure_ascii=False) for c in comments_for_analysis])
 
         task_info["status"] = "数据抓取完毕，正在请求 Gemini AI 分析..."
         task_info["progress"] = 65
-        model = genai.GenerativeModel('gemini-2.5-pro') # 或者 'gemini-pro'
+        model = genai.GenerativeModel('gemini-1.5-flash')
         
         prompt = f"""
 你是一位顶级的市场研究和数据分析专家。你的任务是根据下面提供的关于 "{keyword}" 的 Reddit 评论（数据为JSON Lines格式，每行一条评论，包含body, score, replies, permalink），生成一份结构化的、内容丰富的市场分析报告。
@@ -387,20 +372,24 @@ def real_task_runner(keyword, timeframe, sort_order, limit, search_mode):
         task_info["progress"] = 100
         print(f"任务出错: {e}")
 
+
+# --- Flask 路由 ---
 @app.route('/')
 def index():
     return render_template('index.html')
 
+@app.route('/favicon.ico')
+def favicon():
+    return ('', 204)
+
 @app.route('/start-task', methods=['POST'])
 def start_task():
     data = request.json
-    # 从 data 中获取 search_mode，它在前端的 key 叫做 'subreddits'
-    search_mode = data.get('subreddits') # <--- 1. 接收新参数
+    search_mode = data.get('subreddits')
 
     tasks["current_task"] = { "status": "任务初始化...", "progress": 0, "report_url": "", "ai_subreddits": None }
     
-    # 将 search_mode 作为第5个参数传给 real_task_runner
-    thread = threading.Thread(target=real_task_runner, args=(data.get('keyword'), data.get('timeframe'), data.get('sort_order'), data.get('limit'), search_mode)) # <--- 2. 修改这里
+    thread = threading.Thread(target=real_task_runner, args=(data.get('keyword'), data.get('timeframe'), data.get('sort_order'), data.get('limit'), search_mode))
     thread.start()
     return jsonify({"message": "任务已成功启动"})
 
@@ -408,8 +397,9 @@ def start_task():
 def task_status():
     return jsonify(tasks["current_task"])
 
+
+# --- 服务器启动 ---
 print("\n--- 准备启动服务器 ---")
 if __name__ == '__main__':
-    from waitress import serve
     print("--- 使用 Waitress 服务器启动 ---")
     serve(app, host='0.0.0.0', port=5000)
