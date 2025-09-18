@@ -21,19 +21,41 @@
                     <select id="timeframe">
                         <option value="month">近一个月</option>
                         <option value="year" selected>近一年</option>
+                        <option value="all">所有时间</option>
                     </select>
                     <select id="sort_order">
-                        <option value="top">按热度排序</option>
-                        <option value="new" selected>按时间排序</option>
+                        <option value="relevance">按相关性排序</option>
+                        <option value="hot">按热度排序</option>
+                        <option value="top" selected>按绝对热度(Top)</option>
+                        <option value="new">按时间排序</option>
                     </select>
-                  <select id="subreddits">
-                      <option value="all">全部板块</option>
-                      <option value="smart">智能检索板块</option>
-                     </select>
-                    <input type="number" id="limit" min="1" max="200" value="10" placeholder="帖子数量 (1-200)">
+                    <select id="subreddits">
+                        <option value="all_reddit">全论坛检索</option>
+                        <option value="standard">家居生活版块</option>
+                        <option value="smart" selected>智能检索版块</option>
+                    </select>
+                    <input type="number" id="limit" min="1" max="50" value="10" placeholder="分析帖子数 (1-50)">
+                    
+                    <div class="select-container full-width">
+                        <label for="analysis_mode">分析模式:</label>
+                        <select id="analysis_mode">
+                            <option value="pain_points" selected>用户痛点挖掘</option>
+                            <option value="hot_topics">市场热点分析</option>
+                        </select>
+                    </div>
                 </div>
 
-                <button id="start-task">开始任务</button>
+                <div class="blocklist-section">
+                    <label>内容屏蔽词 (点击词汇可移除):</label>
+                    <div id="blocklist-container" class="blocklist-container">
+                        </div>
+                    <div class="blocklist-input-group">
+                        <input type="text" id="new-blockword-input" placeholder="输入新屏蔽词后按回车">
+                        <button type="button" id="add-blockword-btn">+</button>
+                    </div>
+                </div>
+
+                <button id="start-task">开始分析</button>
             </div>
 
             <div id="progress-container" class="hidden">
@@ -43,19 +65,19 @@
                 </div>
             </div>
             <div id="ai-recommendation-box" class="info-box hidden">
-              <h2>Gemini推荐您在以下社群中检索信息:</h2>
+              <h2>Gemini 正在以下社群中为您检索信息:</h2>
               <ul id="ai-subreddits-list">
              </ul>
             </div>
             <div id="result-container" class="hidden">
-                <p class="emoji-celebration">🎉 任务完成！🎉</p>
-                <a href="#" id="view-report-button" class="button">点击查看报告</a>
+                <p class="emoji-celebration">🎉 分析完成！🎉</p>
+                <a href="#" id="view-report-button" class="button">点击查看洞察报告</a>
             </div>
 
             <div class="disclaimer">
-                <p><strong>请注意：</strong>为了确保API处理效率和控制成本，分析程序当前仅截取抓取到的评论文本的前10,000个字符进行AI分析。</p>
+                <p><strong>请注意：</strong>为了确保API处理效率和控制成本，分析程序当前会截取评论文本进行AI分析。</p>
             </div>
-            </main>
+        </main>
     </div>
     <script src="/static/script.js"></script>
 </body>

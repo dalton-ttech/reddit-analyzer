@@ -182,3 +182,83 @@ button:hover, .button:hover {
     margin-bottom: 8px;
     font-weight: 500;
 }
+/* --- 新增：用于分析模式选项的样式 --- */
+.select-container {
+    grid-column: 1 / -1; /* 让这个容器占据整行宽度 */
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background-color: #f0f2f5;
+    padding: 10px;
+    border-radius: 5px;
+}
+
+.select-container label {
+    font-weight: 500;
+    white-space: nowrap; /* 防止文字换行 */
+}
+/* --- 新增：用于禁用下拉菜单的视觉样式 --- */
+select.disabled-look {
+    background-color: #e9ecef;
+    cursor: not-allowed;
+}
+/* --- 新增：动态屏蔽词UI样式 --- */
+.blocklist-section {
+    margin-top: 20px;
+    background-color: #f8f9fa;
+    padding: 15px;
+    border-radius: 5px;
+    border: 1px solid var(--border-color);
+}
+
+.blocklist-section label {
+    font-weight: 500;
+    display: block;
+    margin-bottom: 10px;
+}
+
+.blocklist-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.blocklist-tag {
+    display: inline-flex;
+    align-items: center;
+    background-color: var(--primary-color);
+    color: white;
+    padding: 5px 10px;
+    border-radius: 15px;
+    font-size: 0.9em;
+    font-weight: 500;
+}
+
+.blocklist-tag .remove-tag-btn {
+    margin-left: 8px;
+    background: none;
+    border: none;
+    color: white;
+    cursor: pointer;
+    font-size: 1.2em;
+    line-height: 1;
+    padding: 0;
+}
+
+.blocklist-input-group {
+    display: flex;
+    gap: 10px;
+}
+
+#new-blockword-input {
+    flex-grow: 1;
+}
+
+#add-blockword-btn {
+    flex-shrink: 0;
+    width: 45px;
+    height: 45px;
+    padding: 0;
+    font-size: 1.5em;
+}

@@ -1,2 +1,103 @@
+# 这是一个注释，说明下面的规则是关于什么的
+
+# 1. Python 字节码和缓存文件
+# -------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+*.pyz
+*.pyw
+*.so
+
+# 2. 虚拟环境
+# 这是非常重要的规则，可以避免把几百MB的库文件上传
+# -------------------------------------------------------------------
+.venv/
+venv/
+env/
+ENV/
+.env/
+virtualenv/
+venv.bak/
+.virtualenv/
+
+# 3. 敏感信息文件
+# 这是最重要的规则，确保你的API密钥、密码等不会泄露！
+# -------------------------------------------------------------------
 .env
+.env.*
+secrets.yml
+*.pem
+*.key
+
+# 4. 构建、分发和测试相关的文件夹和文件
+# -------------------------------------------------------------------
+build/
+dist/
+develop-eggs/
+eggs/
+sdist/
+wheelhouse/
+pip-wheel-metadata/
+lib/
+lib64/
+parts/
+var/
+*.egg-info/
+.egg-info/
+*.egg
+.pytest_cache/
+.tox/
+.coverage
+.coverage.*
+htmlcov/
+nosetests.xml
+coverage.xml
+*.prof
+*.prof.json
+*.lprof
+
+# 5. 常见的编辑器和IDE配置文件
+# -------------------------------------------------------------------
+# VS Code
+.vscode/
+
+# JetBrains (PyCharm, IntelliJ, etc.)
+.idea/
+
+# Visual Studio
+*.sln
+*.suo
+*.user
+*.vcxproj
+*.vcxproj.filters
+
+# Vim
+*.sw[op]
+*~
+
+# Jupyter Notebook 检查点
+.ipynb_checkpoints/
+
+# 6. 运行时生成的状态或日志文件
+# -------------------------------------------------------------------
+# 这一部分可以根据你的项目自定义
+task_status.json
+*.log
+local_settings.py
+
+# 7. 操作系统生成的文件
+# -------------------------------------------------------------------
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
 static/report_*.html
